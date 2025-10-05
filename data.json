@@ -1,0 +1,545 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "video",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1184,
+        -48
+      ],
+      "id": "2d718436-bfde-4f50-ab9c-c8d811c5afae",
+      "name": "Webhook",
+      "webhookId": "afca6816-00e5-4155-b93a-3802a887a118"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst url = $input.first().json.body.url;\n\nfunction extractYouTubeID(url) {\n  const regex = /(?:youtube\\.com\\/.*v=|youtu\\.be\\/)([a-zA-Z0-9_-]{11})/;\n  const match = url.match(regex);\n  return match ? match[1] : null;\n}\n\nconst videoId = extractYouTubeID(url);\n\nreturn [\n  {\n    json: {\n      url,\n      videoId\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1024,
+        -48
+      ],
+      "id": "389c0ca5-af5b-4b00-a6c7-9dbdbad140d2",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        992,
+        160
+      ],
+      "id": "92b73f9f-599a-419c-91a3-a50958b93116",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "9Fy0ntwzjvJgcerk",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst srt = $('Extract from File').first().json.data.trim();\n\n// Split into blocks by blank lines\nconst blocks = srt.split(/\\n\\s*\\n/);\n\nconst segments = blocks.map(block => {\n  const lines = block.split('\\n');\n  // parse \"00:00:00,000 --> 00:00:01,000\"\n  const [start, end] = lines[1].split(' --> ').map(ts => ts.trim());\n  // join remaining lines as the subtitle text\n  const text = lines.slice(2).join(' ').trim();\n  return { start, end, text };\n});\n\n// Return a single item with the full array\nreturn [\n  {\n    json: {\n      segments\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        -48
+      ],
+      "id": "b1065ad0-12cd-4067-872c-31c2b6b16765",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output.clips",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        -48
+      ],
+      "id": "05a184e7-e537-42f1-a8e8-559adea84da3",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"clips\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"start\": { \"type\": \"string\" },\n          \"end\": { \"type\": \"string\" },\n          \"title\": { \"type\": \"string\" }\n        },\n        \"required\": [\"start\", \"end\", \"title\"]\n      }\n    }\n  },\n  \"required\": [\"clips\"]\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1264,
+        160
+      ],
+      "id": "eb35f39a-5666-445c-bee8-7bf1d409d203",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b7fd2a64-08e6-4329-a586-981bcdbe15e5",
+              "name": "videoId",
+              "value": "={{ $('Code').item.json.videoId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        512,
+        -48
+      ],
+      "id": "72cb88bd-4374-4311-836e-bf20bdf80040",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "command": "=mkdir -p ~/Desktop/video/{{ $json.videoId }}\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -848,
+        -48
+      ],
+      "id": "a299e389-14e6-40c0-9a29-04146e5989fd",
+      "name": "Create Folder"
+    },
+    {
+      "parameters": {
+        "command": "=yt-dlp -f \"bestvideo[vcodec^=avc1][height=1080]+bestaudio[acodec^=mp4a]/best[ext=mp4][height=1080]\" \\\n-o \"/Users/jaiminpatel/Desktop/video/{{ $('Code').item.json.videoId }}/{{ $('Code').item.json.videoId }}.mp4\" \\\n--merge-output-format mp4 \\\n\"{{ $('Code').item.json.url }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        -48
+      ],
+      "id": "06552c6d-be34-4c99-90cf-7b91dd4856e0",
+      "name": "Download Video"
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/Users/jaiminpatel/Desktop/video/{{ $('Code').item.json.videoId }}/{{ $('Code').item.json.videoId }}.srt",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -48
+      ],
+      "id": "9c565d8d-c3ea-4d7d-aad0-862a6ce84169",
+      "name": "Read File from Disk"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an AI assistant that processes a full YouTube video transcript and outputs a JSON list of 58–60 second Shorts, all sharing a single base title with a numeric suffix.\n\nINPUT:\nA JSON object with field “segments”, an array of:\n  • “start”: timestamp in “HH:MM:SS,mmm” format  \n  • “end”:   timestamp in “HH:MM:SS,mmm” format  \n  • “text”:  transcript text for that interval  \n\nTASK:\n1. Review all “text” segments and craft one concise base title (4–6 words) that captures the main theme of the video. Make the title good like it should match with the beginning og the video.  \n2. Sequentially merge consecutive segments so that each clip’s total duration is between 40 and 60 seconds.  \n3. Number each clip from 1 onward.  \n4. For clip N, set its title to `<BaseTitle>_<N>` (no spaces around underscore).  \n5. Output a JSON object with field “shorts”, an array of objects each containing:\n   • “start”: clip’s first timestamp  \n   • “end”:   clip’s last timestamp  \n   • “title”: “<BaseTitle>_<clip_index>”  \n\nOUTPUT EXAMPLE:\n```json\n{\n  \"shorts\": [\n    {\n      \"start\": \"00:00:00.000\",\n      \"end\":   \"00:00:45.500\",\n      \"title\": \"CrossCountryPenny_1\"\n    },\n    {\n      \"start\": \"00:00:45.500\",\n      \"end\":   \"00:01:30.000\",\n      \"title\": \"CrossCountryPenny_2\"\n    }\n    // …more clips…\n  ]\n}\n\nHere are the subtitle segments:\n{{ JSON.stringify($json.segments, null, 2) }}\n\n\nAlso convert the time to this format 00:00:19.000 instead of this 00:00:19,000.",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        1024,
+        -48
+      ],
+      "id": "0c086867-77e2-485a-8c00-bc44bcdad1ce",
+      "name": "Video Trimmer"
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "=test #shorts",
+        "regionCode": "IN",
+        "categoryId": "24",
+        "options": {
+          "privacyStatus": "public"
+        }
+      },
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        2784,
+        -48
+      ],
+      "id": "d49ceb08-455f-4993-8f22-2d45a7b91521",
+      "name": "YouTube",
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "mcGHAucEWIX5KopE",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        288,
+        -48
+      ],
+      "id": "6cd4b7d9-1cf6-47a7-b4eb-2b24f440313f",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "command": "=mkdir -p ~/Desktop/video/6BVMjlWja_8/clips\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1392,
+        -208
+      ],
+      "id": "bc90f782-a969-4e38-b13c-9f4fe99c8685",
+      "name": "Create Folder1"
+    },
+    {
+      "parameters": {
+        "command": "=mkdir -p ~/Desktop/video/{{ $('Edit Fields').item.json.videoId }}/final\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        -224
+      ],
+      "id": "fe60efc4-4765-4a69-95bd-58c92e13a161",
+      "name": "Create Folder2"
+    },
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=ffmpeg \\\n  -i ~/Desktop/video/{{ $('Edit Fields').item.json.videoId }}/clips/{{ $('Split Out').item.json.title }}.mp4 \\\n -i ~/Desktop/subway.mp4 \\\n  -filter_complex '[0:v]scale=1080:960[avatar];[1:v]scale=1080:960[subway];[avatar][subway]vstack=inputs=2[v]' \\\n  -map '[v]' \\\n  -map 0:a \\\n  -t 58 \\\n  -c:v libx264 -preset veryfast \\\n  -c:a aac -b:a 192k \\\n  -movflags +faststart \\\n  ~/Desktop/video/{{ $('Edit Fields').item.json.videoId }}/final/{{ $('Split Out').item.json.title }}.mp4\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        -48
+      ],
+      "id": "b368e70b-ab37-410b-b5f9-dbff316b2875",
+      "name": "Create Folder3"
+    },
+    {
+      "parameters": {
+        "command": "=whisper \"/Users/jaiminpatel/Desktop/video/{{ $('Code').item.json.videoId }}/{{ $('Code').item.json.videoId }}.mp4\" \\\n  --model small \\\n  --output_format srt \\\n  --output_dir \"/Users/jaiminpatel/Desktop/video/{{ $('Code').item.json.videoId }}\"\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        -48
+      ],
+      "id": "20334fec-6bac-47f0-b8d3-195eeed12890",
+      "name": "Download Substitles"
+    },
+    {
+      "parameters": {
+        "command": "=ffmpeg -i /Users/jaiminpatel/Desktop/video/{{ $('Code').item.json.videoId }}/{{ $('Code').item.json.videoId }}.mp4 -vn -acodec pcm_s16le -ar 16000 -ac 1 /Users/jaiminpatel/Desktop/video/{{ $('Code').item.json.videoId }}/output.wav"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        -48
+      ],
+      "id": "e6809e53-a85a-4afe-91f5-a2e4183087ff",
+      "name": "Create Wav File"
+    },
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=ffmpeg -i ~/Desktop/video/{{ $('Edit Fields').item.json.videoId }}/{{ $('Edit Fields').item.json.videoId }}.mp4 \\\n  -ss {{ $json.start }} \\\n  -to {{ $json.end }} \\\n  -c:v libx264 -c:a aac \\\n  ~/Desktop/video/{{ $('Edit Fields').item.json.videoId }}/{{ $json.title }}.mp4\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        -48
+      ],
+      "id": "a317c7b8-4405-444c-9942-7ea1039167e0",
+      "name": "Execute Command1"
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/Users/jaiminpatel/Desktop/video/{{ $('Edit Fields').item.json.videoId }}/final/PennyJourneyDayTwo_1.mp4",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        2608,
+        -48
+      ],
+      "id": "e39f51ac-701d-4b7b-bada-6db771b6d036",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Function node\nconst items = [];\nconst basePath = '/Users/jaiminpatel/Desktop/video/6BVMjlWja_8/final';\n\nfor (let i = 1; i <= 14; i++) {\n  const title = `PennyJourneyDayTwo_${i}`;\n  items.push({\n    json: {\n      title,\n      filePath: `${basePath}/${title}.mp4`,\n    },\n  });\n}\n\nreturn items;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        -48
+      ],
+      "id": "d43502b1-70a8-4f06-a9bf-b104512faee7",
+      "name": "Code2"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Create Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Video Trimmer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Video Trimmer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Execute Command1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Video Trimmer",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Folder": {
+      "main": [
+        [
+          {
+            "node": "Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Video": {
+      "main": [
+        [
+          {
+            "node": "Create Wav File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read File from Disk": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Video Trimmer": {
+      "main": [
+        [
+          {
+            "node": "Create Folder1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Folder1": {
+      "main": [
+        []
+      ]
+    },
+    "Create Folder3": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Substitles": {
+      "main": [
+        [
+          {
+            "node": "Read File from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Wav File": {
+      "main": [
+        [
+          {
+            "node": "Download Substitles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command1": {
+      "main": [
+        [
+          {
+            "node": "Create Folder2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create Folder3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "YouTube",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "484e3a94c43663660d06c869af2991d18265241d973877b91a2df803f458dc96"
+  }
+}
